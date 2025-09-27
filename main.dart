@@ -208,3 +208,40 @@ class _LoginState extends State<LoginScreen> {
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),
           );
+
+        } else {
+          setState(() => _err = 'لا توجد جلسة محفوظة لفتحها بدون إنترنت.');
+        }
+        
+      } else {
+        final res = await MockApi.login(
+          memberId: _member.text.trim(),
+          password: _pass.text.trim(),
+        );
+        if (res.needOtp) {
+          if (!mounted) return;
+          final ok = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => OtpScreen(token: res.otpToken!)),
+          );
+          if (ok == true && mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+            );
+          }
+        } else {
+          await Vault.saveSession(_member.text.trim());
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
+      }
+    } on AuthError catch (e) {
+      setState(() => _err = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
