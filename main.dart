@@ -196,3 +196,15 @@ class _LoginState extends State<LoginScreen> {
       if (mounted) setState(() => _isOffline = (r == ConnectivityResult.none));
     });
   }
+
+  Future<void> _login() async {
+    FocusScope.of(context).unfocus();
+    setState(() => {_loading = true, _err = null});
+    try {
+      if (_offlineLogin) {
+        if (await Vault.isLogged()) {
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
