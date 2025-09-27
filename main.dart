@@ -41,3 +41,158 @@ ThemeData appTheme() => ThemeData(
     contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
   ),
 );
+
+/* ============================== SECURE STORAGE ============================== */
+class Vault {
+  static const _s = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+  static Future<void> write(String k, String v) => _s.write(key: k, value: v);
+  static Future<String?> read(String k) => _s.read(key: k);
+  static Future<void> del(String k) => _s.delete(key: k);
+
+  static Future<void> saveSession(String user) async {
+    await write('logged_user', user);
+  }
+
+  static Future<void> clearSession() async {
+    await del('logged_user');
+  }
+
+  static Future<bool> isLogged() async => (await read('logged_user')) != null;
+
+  static Future<void> ensureDefaultUser() async {
+    // مستخدم افتراضي للمشروع الجامعي
+    if (await read('user_id') == null) {
+      await write('user_id', '3109801711'); // “رقم مميز” تجريبي
+      final salt = _salt16();
+      await write('pw_salt', salt);
+      await write('pw_hash', _hash('123456', salt)); // كلمة افتراضية: 123456
+      await write('display_name', 'adeeb + baleegh');
+      await write('account_no', '3109801711-YER');
+      await write('balance', '152340'); // رصيد تجريبي
+      await write('currency', 'YER');
+    }
+  }
+
+  static String _salt16() {
+    final r = Random.secure();
+    final bytes = List<int>.generate(16, (_) => r.nextInt(256));
+    return base64UrlEncode(bytes);
+  }
+
+  static String _hash(String pw, String salt) {
+    final b = utf8.encode('$pw::$salt');
+    return sha256.convert(b).toString();
+  }
+
+  static Future<bool> verifyPassword(String pw) async {
+    final salt = await read('pw_salt') ?? '';
+    final saved = await read('pw_hash');
+    return saved == _hash(pw, salt);
+  }
+}
+
+/* ================================== MOCK API ================================== */
+class MockApi {
+  // محاكاة طلب شبكة (تأخير + رد)
+  static Future<LoginResult> login({
+    required String memberId,
+    required String password,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 700));
+    final goodId = await Vault.read('user_id') ?? '';
+    final okPw = await Vault.verifyPassword(password);
+    if (memberId == goodId && okPw) {
+      // أحياناً نطلب OTP (عرض تعليمي)
+      final needOtp = (DateTime.now().second % 2 == 0);
+      if (needOtp) {
+        final otpToken = base64UrlEncode(
+          utf8.encode('otp:${DateTime.now().millisecondsSinceEpoch}'),
+        );
+        return LoginResult(needOtp: true, otpToken: otpToken);
+      }
+      return LoginResult(needOtp: false);
+    }
+    throw AuthError('بيانات الدخول غير صحيحة.');
+  }
+
+  static Future<void> verifyOtp({
+    required String token,
+    required String code,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (code != '000000' && code != '123456') {
+      throw AuthError('رمز التحقق غير صحيح.');
+    }
+  }
+
+  static Future<void> changePin({
+    required String oldPin,
+    required String newPin,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final ok = await Vault.verifyPassword(oldPin);
+    if (!ok) throw AuthError('الرمز الحالي غير صحيح.');
+    final salt = await Vault.read('pw_salt') ?? '';
+    await Vault.write('pw_hash', Vault._hash(newPin, salt));
+  }
+}
+
+class LoginResult {
+  final bool needOtp;
+  final String? otpToken;
+  LoginResult({required this.needOtp, this.otpToken});
+}
+
+class AuthError implements Exception {
+  final String message;
+  AuthError(this.message);
+  @override
+  String toString() => message;
+}
+/* =================================== LOGIN =================================== */
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+  @override
+  State<LoginScreen> createState() => _LoginState();
+}
+
+class _LoginState extends State<LoginScreen> {
+  final _member = TextEditingController();
+  final _pass = TextEditingController();
+  bool _hide = true,
+      _loading = false,
+      _isOffline = false,
+      _offlineLogin = false;
+  String? _err;
+  final _auth = LocalAuthentication();
+  StreamSubscription? _connSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenConnectivity();
+  }
+
+  @override
+  void dispose() {
+    _connSub?.cancel();
+    _member.dispose();
+    _pass.dispose();
+    super.dispose();
+  }
+
+  void _listenConnectivity() async {
+    final current = await Connectivity().checkConnectivity();
+    final ConnectivityResult r0 = current is List<ConnectivityResult>
+        ? (current.isNotEmpty ? current.first : ConnectivityResult.none)
+        : current as ConnectivityResult;
+    setState(() => _isOffline = (r0 == ConnectivityResult.none));
+    _connSub = Connectivity().onConnectivityChanged.listen((event) {
+      final ConnectivityResult r = event is List<ConnectivityResult>
+          ? (event.isNotEmpty ? event.first : ConnectivityResult.none)
+          : event as ConnectivityResult;
+      if (mounted) setState(() => _isOffline = (r == ConnectivityResult.none));
+    });
+  }
