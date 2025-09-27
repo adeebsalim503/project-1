@@ -245,3 +245,12 @@ class _LoginState extends State<LoginScreen> {
       if (mounted) setState(() => _loading = false);
     }
   }
+  
+  Future<void> _biometric() async {
+    setState(() => {_loading = true, _err = null});
+    try {
+      final can =
+          await _auth.isDeviceSupported() && await _auth.canCheckBiometrics;
+      if (!can) {
+        setState(() => _err = 'جهازك لا يدعم البصمة.');
+      } else 
