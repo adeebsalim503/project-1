@@ -1,3 +1,9 @@
+// --------- Simple Kuraimi-like University Project (Single file) ---------
+// UI: Login + Home (services grid) + Settings
+// Security: secure storage (hashed password), biometrics unlock, idle auto-lock,
+// connectivity banner, prevent screenshots & preview leakage.
+// No real backend: MockApi simulates HTTP delay/responses (perfect for uni).
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -9,6 +15,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:screen_protector/screen_protector.dart';
 
+/* ============================== THEME / CONFIG ============================== */
 const _primary = Color(0xFF673AB7); // purple
 const _accent = Color(0xFFF7A600); // orange
 const _idleLockSeconds = 90;
@@ -151,6 +158,109 @@ class AuthError implements Exception {
   @override
   String toString() => message;
 }
+
+/* ==================================== APP ==================================== */
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await ScreenProtector.preventScreenshotOn();
+    await ScreenProtector.protectDataLeakageOn();
+  } catch (_) {}
+  await Vault.ensureDefaultUser();
+  runApp(const UniKuraimiDemo());
+}
+
+class UniKuraimiDemo extends StatefulWidget {
+  const UniKuraimiDemo({super.key});
+  @override
+  State<UniKuraimiDemo> createState() => _AppState();
+}
+
+class _AppState extends State<UniKuraimiDemo> with WidgetsBindingObserver {
+  final navKey = GlobalKey<NavigatorState>();
+  Timer? _idle;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _idle?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.paused || s == AppLifecycleState.inactive) {
+      _lockNow();
+    }
+  }
+
+  void _resetIdle() {
+    _idle?.cancel();
+    _idle = Timer(const Duration(seconds: _idleLockSeconds), _lockNow);
+  }
+
+  Future<void> _lockNow() async {
+    await Vault.clearSession();
+    navKey.currentState?.popUntil((r) => r.isFirst);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Uni Kuraimi-like',
+      debugShowCheckedModeBanner: false,
+      theme: appTheme(),
+      locale: const Locale('ar'),
+      supportedLocales: const [Locale('ar'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      navigatorKey: navKey,
+      builder: (_, child) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _resetIdle,
+          onPanDown: (_) => _resetIdle(),
+          child: child,
+        ),
+      ),
+      home: const _Gate(),
+    );
+  }
+}
+
+class _Gate extends StatefulWidget {
+  const _Gate();
+  @override
+  State<_Gate> createState() => _GateState();
+}
+
+class _GateState extends State<_Gate> {
+  late Future<bool> _f;
+  @override
+  void initState() {
+    super.initState();
+    _f = Vault.isLogged();
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    return FutureBuilder<bool>(
+      future: _f,
+      builder: (_, s) =>
+      s.data == true ? const HomeScreen() : const LoginScreen(),
+    );
+  }
+}
+
 /* =================================== LOGIN =================================== */
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -208,11 +318,9 @@ class _LoginState extends State<LoginScreen> {
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),
           );
-
         } else {
           setState(() => _err = 'لا توجد جلسة محفوظة لفتحها بدون إنترنت.');
         }
-        
       } else {
         final res = await MockApi.login(
           memberId: _member.text.trim(),
@@ -245,7 +353,7 @@ class _LoginState extends State<LoginScreen> {
       if (mounted) setState(() => _loading = false);
     }
   }
-  
+
   Future<void> _biometric() async {
     setState(() => {_loading = true, _err = null});
     try {
@@ -261,7 +369,6 @@ class _LoginState extends State<LoginScreen> {
             stickyAuth: true,
           ),
         );
-        
         if (ok && await Vault.isLogged()) {
           if (!mounted) return;
           Navigator.pushReplacement(
@@ -277,6 +384,8 @@ class _LoginState extends State<LoginScreen> {
     }
     if (mounted) setState(() => _loading = false);
   }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -291,9 +400,9 @@ class _LoginState extends State<LoginScreen> {
               alignment: Alignment.center,
               child: _isOffline
                   ? const Text(
-                      'الرجاء التحقق من الاتصال بالإنترنت',
-                      style: TextStyle(color: Colors.white),
-                    )
+                'الرجاء التحقق من الاتصال بالإنترنت',
+                style: TextStyle(color: Colors.white),
+              )
                   : null,
             ),
             Expanded(
@@ -381,10 +490,9 @@ class _LoginState extends State<LoginScreen> {
                                   Checkbox(
                                     value: _offlineLogin,
                                     onChanged: (v) => setState(
-                                      () => _offlineLogin = v ?? false,
+                                          () => _offlineLogin = v ?? false,
                                     ),
                                   ),
-                                 
                                   const Text('الدخول بدون إنترنت'),
                                   const Spacer(),
                                   TextButton(
@@ -415,13 +523,13 @@ class _LoginState extends State<LoginScreen> {
                           onPressed: _loading ? null : _login,
                           child: _loading
                               ? const SizedBox(
-                                  height: 22,
-                                  width: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                               : const Text('دخول'),
                         ),
                         const SizedBox(height: 6),
@@ -497,13 +605,13 @@ class _OtpState extends State<OtpScreen> {
             onPressed: _loading ? null : _verify,
             child: _loading
                 ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
+              height: 22,
+              width: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
                 : const Text('تأكيد'),
           ),
         ],
@@ -547,7 +655,7 @@ class _HomeState extends State<HomeScreen> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
+          (_) => false,
     );
   }
 
@@ -697,6 +805,7 @@ class _HomeState extends State<HomeScreen> {
     );
   }
 }
+
 class _Tile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -768,8 +877,6 @@ class _SettingsState extends State<SettingsScreen> {
               ),
             ),
           ),
-
-          
           const Divider(),
           SwitchListTile(
             value: _bio,
@@ -799,12 +906,12 @@ class _SettingsState extends State<SettingsScreen> {
   }
 }
 
+/* ============================== CHANGE PIN PAGE ============================== */
 class ChangePinPage extends StatefulWidget {
   const ChangePinPage({super.key});
   @override
   State<ChangePinPage> createState() => _ChangePinState();
 }
-
 
 class _ChangePinState extends State<ChangePinPage> {
   final _old = TextEditingController(),
@@ -892,13 +999,13 @@ class _ChangePinState extends State<ChangePinPage> {
             onPressed: _loading ? null : _submit,
             child: _loading
                 ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
+              height: 22,
+              width: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
                 : const Text('حفظ'),
           ),
         ],
