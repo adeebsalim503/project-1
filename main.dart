@@ -767,6 +767,8 @@ class _SettingsState extends State<SettingsScreen> {
               ),
             ),
           ),
+
+          
           const Divider(),
           SwitchListTile(
             value: _bio,
