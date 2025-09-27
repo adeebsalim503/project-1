@@ -440,3 +440,73 @@ class _LoginState extends State<LoginScreen> {
     );
   }
 }
+
+/* ==================================== OTP ==================================== */
+class OtpScreen extends StatefulWidget {
+  final String token;
+  const OtpScreen({super.key, required this.token});
+  @override
+  State<OtpScreen> createState() => _OtpState();
+}
+
+class _OtpState extends State<OtpScreen> {
+  final _otp = TextEditingController();
+  bool _loading = false;
+  String? _err;
+  Future<void> _verify() async {
+    setState(() => {_loading = true, _err = null});
+    try {
+      await MockApi.verifyOtp(token: widget.token, code: _otp.text.trim());
+      final user = await Vault.read('user_id') ?? '';
+      await Vault.saveSession(user);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on AuthError catch (e) {
+      setState(() => _err = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('التحقق OTP')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('أدخل رمز التحقق (للتجربة: 000000 أو 123456)'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _otp,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            decoration: const InputDecoration(
+              hintText: 'رمز التحقق',
+              counterText: '',
+            ),
+            onSubmitted: (_) => _verify(),
+          ),
+          if (_err != null) ...[
+            const SizedBox(height: 6),
+            Text(_err!, style: const TextStyle(color: Colors.red)),
+          ],
+          const SizedBox(height: 10),
+          FilledButton(
+            onPressed: _loading ? null : _verify,
+            child: _loading
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+  }
+}
