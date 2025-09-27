@@ -384,6 +384,7 @@ class _LoginState extends State<LoginScreen> {
                                       () => _offlineLogin = v ?? false,
                                     ),
                                   ),
+                                 
                                   const Text('الدخول بدون إنترنت'),
                                   const Spacer(),
                                   TextButton(
