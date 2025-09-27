@@ -261,3 +261,15 @@ class _LoginState extends State<LoginScreen> {
             stickyAuth: true,
           ),
         );
+        
+        if (ok && await Vault.isLogged()) {
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        } else if (!ok) {
+          setState(() => _err = 'لم يتم التحقق بالبصمة.');
+        }
+      }
+    } 
