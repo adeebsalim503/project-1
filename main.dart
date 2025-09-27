@@ -253,4 +253,11 @@ class _LoginState extends State<LoginScreen> {
           await _auth.isDeviceSupported() && await _auth.canCheckBiometrics;
       if (!can) {
         setState(() => _err = 'جهازك لا يدعم البصمة.');
-      } else 
+      } else {
+        final ok = await _auth.authenticate(
+          localizedReason: 'افتح الجلسة ببصمة الجهاز',
+          options: const AuthenticationOptions(
+            biometricOnly: true,
+            stickyAuth: true,
+          ),
+        );
