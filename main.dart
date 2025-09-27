@@ -272,4 +272,8 @@ class _LoginState extends State<LoginScreen> {
           setState(() => _err = 'لم يتم التحقق بالبصمة.');
         }
       }
-    } 
+    } catch (_) {
+      setState(() => _err = 'تعذّر استخدام البصمة.');
+    }
+    if (mounted) setState(() => _loading = false);
+  }
